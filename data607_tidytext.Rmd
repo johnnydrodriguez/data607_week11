@@ -1,0 +1,164 @@
+---
+title: "Tidy Text"
+author: "Johnny Rodriguez"
+date: "2022-11-07"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_float:
+      collapsed: true
+    toc_depth: 4
+    number_sections: false
+    highlight: pygments
+    theme: cerulean
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Environment Setup
+Loads the initial libraries
+
+
+```{r}
+
+#Install & load the necessary libraries.
+#install.packages("textdata")
+#install.packages("tidytext")
+library(tidytext)
+library(ggplot2)
+
+#Intall the Sentiment Lexicons
+get_sentiments("afinn")
+get_sentiments("bing")
+get_sentiments("nrc")
+```
+
+### TidyText Data Mining Sample Code
+
+```{r}
+library(janeaustenr)
+library(dplyr)
+library(stringr)
+library(tidyr)
+
+
+# Tokenize book text into word tokens
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+
+#Joy words in NRC sentiment
+nrcjoy <- get_sentiments("nrc") %>%
+filter(sentiment == "joy")
+
+#Find joy words in Emma
+tidy_books %>%
+  filter(book == "Emma") %>%
+  inner_join(nrcjoy) %>%
+  count(word, sort = TRUE)
+
+#Calculates sentiment score
+janeaustensentiment <- tidy_books %>% 
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+
+#Plots ths sentiment score
+ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+
+```
+<br/>
+
+### Sentiment Comparison of 2 poems 
+
+I wanted to see if the sentiment analysis was able to capture the sentiment to 2 poems that appear on opposite ends of the sentiment spectrum.
+
+Elegy Written in a Country Churchyard by Thomas Gray ***"embodies a meditation on death, and remembrance after death. The poem argues that the remembrance can be good and bad, and the narrator finds comfort in pondering the lives of the obscure rustics buried in the churchyard."***  (Wikipedia). The tone and themses of this poem are somber and perhaps a bit unsatisfying as it reflects on death, remembrance and the obscurity of the graveyard residents.
+
+somewhere i have never travelled by ee cummings, as my English teacher once put it, is one of those love poems that high school sweethearts have been reciting to each other since it was popularized.  It is an ode to the narrator's beloved who holds a deep and intense power over him.
+
+<br/>
+
+### Sentiment Plot for Elegy Written In a Country Churchyard
+Using the Afinn lexicon which scores the text elements, the plot was able to capture the somber complexity of this poem as it progresses. Interestingly, most of the poem's sentiment fluctuates between 3 and -3 indicating an overall balance of the tone.  However, it most negative sentiment (-6 score) appears to hover around the phrase ***"The threats of pain and ruin to despise"***
+
+```{r}
+
+library(ggplot2)
+library(readr)
+library(gridExtra)
+
+#Reads the text of the poem "Elegy Written In a Country Churchyard" by Thomas Gray
+churchyard <- read.table("https://raw.githubusercontent.com/johnnydrodriguez/data607_week11/main/churchyard.txt",  sep = "\n", quote="", fill=FALSE)
+
+# Converts the text into a dataframe
+churchyard_df <- tibble(lines = 1:130, text = churchyard$V1)
+churchyard_df$text <- trimws(churchyard_df$text)
+
+#Tokenizes the poem
+churchyard_df <- churchyard_df %>% 
+  unnest_tokens(word, text)
+
+#Using the Afinn lexicon, generates sentiment value
+elegysentiment <- churchyard_df %>%
+  inner_join(get_sentiments("afinn"))
+
+#Plots the sentiment for this poem
+e <- ggplot(elegysentiment, aes(lines, value)) +
+geom_col(show.legend = FALSE)+
+  ggtitle("Elegy Written In a Country Churchyard")
+e
+
+
+```
+
+### Sentiment Plot for somewhere i have never travelled
+Surprisingly, and unlike the previous poem, the Afinn lexicon only scored a handful(5) of words.  Although this is likely too small a dataset to capture the sentiment, it does reflect a generally positive sentiment.
+
+```{r}
+
+#Reads the text of the poem "somewhere i have never travelled" by ee cummings 
+somewhere <- read.table("https://raw.githubusercontent.com/johnnydrodriguez/data607_week11/main/somewhere.txt",  sep = "\n", quote="", fill=FALSE)
+
+# Converts the text into a dataframe
+somewhere_df <- tibble(lines = 1:21, text = somewhere$V1)
+
+#Tokenizes the poem
+somewhere_df <- somewhere_df %>% 
+  unnest_tokens(word, text)
+
+#Using the Afinn lexicon, generates sentiment value
+somewheresentiment <- somewhere_df %>%
+  inner_join(get_sentiments("afinn"))
+
+#Plots the sentiment for this poem
+s <- ggplot(somewheresentiment, aes(lines, value)) +
+geom_col(show.legend = FALSE)+
+  ggtitle("somewhere i have never travelled")
+s
+
+
+
+```
+
+### Side by side comparison of both poems
+The comparison shows the very distinct sentiments of these poems.  
+
+```{r}
+grid.arrange(e, s, ncol =2)
+```
+
+
+
+### Conclusion
+Although the sentiment scores were able to generalize the sentiments of these poems (perhaps fairly accurately), its unclear whether sentiment scoring can capture something as complex and, often, personal as poetry that can have very broad interpretations.  In this specific case, it was surprising that "Elegy" appears to be more balanced in sentiment than its reputation, setting and themes would lead us to believe. 
